@@ -1,140 +1,67 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>CITY DRIVE BY DAVA</title>
-<style>
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: none;
-  }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>City Drive by Dava</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #fff; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    #ui { position: fixed; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 16px; }
+    .hud-top { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 18px; text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
+    .badge { background: rgba(17,24,39,0.75); border: 1px solid rgba(255,255,255,0.15); padding: 8px 14px; border-radius: 999px; }
+    #menu { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; z-index: 10; }
+    h1 { font-size: 32px; letter-spacing: 1px; margin-bottom: 6px; color: #38bdf8; }
+    p.sub { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+    .cars { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; max-width: 360px; margin-bottom: 22px; }
+    .car-card { background: #1e293b; border: 2px solid #334155; border-radius: 14px; padding: 12px; cursor: pointer; transition: 0.15s; }
+    .car-card.active { border-color: #38bdf8; background: #0f172a; }
+    .car-card.locked { opacity: 0.7; }
+    .car-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+    .car-info { font-size: 12px; color: #cbd5e1; }
+    .btn { background: linear-gradient(135deg, #0ea5e9, #2563eb); color: #fff; border: none; border-radius: 14px; padding: 15px 36px; font-size: 18px; font-weight: 800; cursor: pointer; width: 100%; max-width: 360px; box-shadow: 0 8px 20px rgba(37,99,235,0.4); }
+    .btn:active { transform: scale(0.98); }
+    .controls-hint { margin-top: 14px; font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="ui">
+    <div class="hud-top">
+      <div class="badge">⭐ <span id="starsHud">0</span></div>
+      <div class="badge">🏁 <span id="scoreHud">0</span></div>
+    </div>
+  </div>
 
-  body, html {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #111;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    color: #fff;
-  }
+  <div id="menu">
+    <h1>CITY DRIVE</h1>
+    <p class="sub">Обгоняй машины, собирай ⭐ и открывай новые авто</p>
+    <div class="badge" style="margin-bottom:16px;">Твои звёзды: ⭐ <span id="starsMenu">0</span></div>
+    <div class="cars" id="carList"></div>
+    <button class="btn" id="startBtn">ПОЕХАЛИ</button>
+    <div class="controls-hint">Нажимай на левую или правую часть экрана для перестроения</div>
+  </div>
 
-  #gameCanvas {
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const menu = document.getElementById('menu');
+    const carListEl = document.getElementById('carList');
+    const starsHud = document.getElementById('starsHud');
+    const starsMenu = document.getElementById('starsMenu');
+    const scoreHud = document.getElementById('scoreHud');
+    const startBtn = document.getElementById('startBtn');
 
-  #hud {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    padding: 12px 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    pointer-events: none;
-    z-index: 10;
-  }
+    const CARS = [
+      { id: 0, name: 'Urban Hatch', color: '#38bdf8', speed: 6, cost: 0 },
+      { id: 1, name: 'Street Coupe', color: '#f43f5e', speed: 7.5, cost: 15 },
+      { id: 2, name: 'Night GT', color: '#a855f7', speed: 9, cost: 35 },
+      { id: 3, name: 'Hyper Apex', color: '#f59e0b', speed: 11, cost: 70 }
+    ];
 
-  .hud-box {
-    background: rgba(15, 20, 30, 0.78);
-    backdrop-filter: blur(6px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    padding: 8px 14px;
-    border-radius: 12px;
-    font-weight: 700;
-    font-size: 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-  }
+    let stars = Number(localStorage.getItem('dava_stars') || 0);
+    let unlocked = JSON.parse(localStorage.getItem('dava_unlocked') || '[0]');
+    let selectedCar = Number(localStorage.getItem('dava_selected') || 0);
 
-  .star-count {
-    color: #ffd700;
-    font-size: 20px;
-  }
-
-  #garageBtn {
-    pointer-events: auto;
-    background: linear-gradient(135deg, #ff9800, #f57c00);
-    color: #fff;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 12px;
-    font-weight: 800;
-    font-size: 15px;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(245, 124, 0, 0.45);
-    transition: transform 0.1s;
-  }
-
-  #garageBtn:active {
-    transform: scale(0.95);
-  }
-
-  #overtakePopup {
-    position: fixed;
-    top: 22%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.5);
-    font-size: 28px;
-    font-weight: 900;
-    color: #ffd700;
-    text-shadow: 0 3px 10px rgba(0,0,0,0.8);
-    opacity: 0;
-    pointer-events: none;
-    transition: all 0.25s ease-out;
-    z-index: 15;
-  }
-
-  #overtakePopup.show {
-    opacity: 1;
-    transform: translate(-50%, -80%) scale(1.1);
-  }
-
-  #controls {
-    position: fixed;
-    bottom: 18px;
-    left: 0;
-    width: 100%;
-    padding: 0 18px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    pointer-events: none;
-    z-index: 20;
-  }
-
-  .steer-group {
-    display: flex;
-    gap: 14px;
-    pointer-events: auto;
-  }
-
-  .pedals-group {
-    display: flex;
-    gap: 14px;
-    align-items: flex-end;
-    pointer-events: auto;
-  }
-
-  .ctrl-btn {
-    background: rgba(255, 255, 255, 0.16);
-    backdrop-filter: blur(5px);
-    border: 2px solid rgba(255, 255, 255, 0.35);
-    color: #fff;
-    border-radius: 16px;
-    font-weight: 800;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 6px 16px rgba(0,0,
+    let W = 0,
