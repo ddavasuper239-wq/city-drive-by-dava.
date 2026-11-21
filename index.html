@@ -1,67 +1,95 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>City Drive by Dava</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #fff; }
-    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-    #ui { position: fixed; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 16px; }
-    .hud-top { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 18px; text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
-    .badge { background: rgba(17,24,39,0.75); border: 1px solid rgba(255,255,255,0.15); padding: 8px 14px; border-radius: 999px; }
-    #menu { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; z-index: 10; }
-    h1 { font-size: 32px; letter-spacing: 1px; margin-bottom: 6px; color: #38bdf8; }
-    p.sub { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
-    .cars { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; max-width: 360px; margin-bottom: 22px; }
-    .car-card { background: #1e293b; border: 2px solid #334155; border-radius: 14px; padding: 12px; cursor: pointer; transition: 0.15s; }
-    .car-card.active { border-color: #38bdf8; background: #0f172a; }
-    .car-card.locked { opacity: 0.7; }
-    .car-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
-    .car-info { font-size: 12px; color: #cbd5e1; }
-    .btn { background: linear-gradient(135deg, #0ea5e9, #2563eb); color: #fff; border: none; border-radius: 14px; padding: 15px 36px; font-size: 18px; font-weight: 800; cursor: pointer; width: 100%; max-width: 360px; box-shadow: 0 8px 20px rgba(37,99,235,0.4); }
-    .btn:active { transform: scale(0.98); }
-    .controls-hint { margin-top: 14px; font-size: 12px; color: #94a3b8; }
-  </style>
-</head>
-<body>
-  <canvas id="game"></canvas>
-  <div id="ui">
-    <div class="hud-top">
-      <div class="badge">⭐ <span id="starsHud">0</span></div>
-      <div class="badge">🏁 <span id="scoreHud">0</span></div>
-    </div>
-  </div>
+function fit(){W=c.width=innerWidth;H=c.height=innerHeight}
+addEventListener('resize',fit);fit();
 
-  <div id="menu">
-    <h1>CITY DRIVE</h1>
-    <p class="sub">Обгоняй машины, собирай ⭐ и открывай новые авто</p>
-    <div class="badge" style="margin-bottom:16px;">Твои звёзды: ⭐ <span id="starsMenu">0</span></div>
-    <div class="cars" id="carList"></div>
-    <button class="btn" id="startBtn">ПОЕХАЛИ</button>
-    <div class="controls-hint">Нажимай на левую или правую часть экрана для перестроения</div>
-  </div>
+function save(){
+localStorage.setItem('cd_s',stars);
+localStorage.setItem('cd_u',JSON.stringify(unl));
+localStorage.setItem('cd_c',sel);
+}
 
-  <script>
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
-    const menu = document.getElementById('menu');
-    const carListEl = document.getElementById('carList');
-    const starsHud = document.getElementById('starsHud');
-    const starsMenu = document.getElementById('starsMenu');
-    const scoreHud = document.getElementById('scoreHud');
-    const startBtn = document.getElementById('startBtn');
+function drawMenu(){
+document.getElementById('sMenu').textContent=stars;
+document.getElementById('sHud').textContent=stars;
+const el=document.getElementById('list');
+el.innerHTML='';
+CARS.forEach(car=>{
+const ok=unl.includes(car.id),act=sel===car.id;
+const d=document.createElement('div');
+d.className='card'+(act?' active':'');
+d.innerHTML='<b style="color:'+car.col+'">'+car.n+'</b><div style="font-size:12px;margin-top:4px">'+(ok?(act?'Выбрано':'Доступно'):'★ '+car.cost)+'</div>';
+d.onclick=()=>{
+if(ok){sel=car.id;save();drawMenu()}
+else if(stars>=car.cost){stars-=car.cost;unl.push(car.id);sel=car.id;save();drawMenu()}
+};
+el.appendChild(d);
+});
+}
 
-    const CARS = [
-      { id: 0, name: 'Urban Hatch', color: '#38bdf8', speed: 6, cost: 0 },
-      { id: 1, name: 'Street Coupe', color: '#f43f5e', speed: 7.5, cost: 15 },
-      { id: 2, name: 'Night GT', color: '#a855f7', speed: 9, cost: 35 },
-      { id: 3, name: 'Hyper Apex', color: '#f59e0b', speed: 11, cost: 70 }
-    ];
+function road(){const rw=Math.min(W*.86,400),l=(W-rw)/2;return{l,rw,lw:rw/3}}
 
-    let stars = Number(localStorage.getItem('dava_stars') || 0);
-    let unlocked = JSON.parse(localStorage.getItem('dava_unlocked') || '[0]');
-    let selectedCar = Number(localStorage.getItem('dava_selected') || 0);
+function startGame(){
+const r=road();
+lane=1;px=r.l+r.lw*1.5;score=0;cars=[];tm=0;run=true;
+menu.style.display='none';
+document.getElementById('pHud').textContent='0';
+document.getElementById('sHud').textContent=stars;
+}
 
-    let W = 0,
+c.addEventListener('pointerdown',e=>{
+if(!run)return;
+if(e.clientX<W/2&&lane>0)lane--;
+if(e.clientX>=W/2&&lane<2)lane++;
+});
+
+function box(cx,cy,w,h,col,pl){
+x.fillStyle=col;x.fillRect(cx-w/2,cy-h/2,w,h);
+x.fillStyle='#0f172a';x.fillRect(cx-w*.34,cy-h*.2,w*.68,h*.4);
+x.fillStyle=pl?'#fef08a':'#ef4444';
+const ly=pl?cy-h/2+3:cy+h/2-7;
+x.fillRect(cx-w*.35,ly,w*.2,4);x.fillRect(cx+w*.15,ly,w*.2,4);
+}
+
+function loop(){
+x.fillStyle='#064e3b';x.fillRect(0,0,W,H);
+const r=road();
+x.fillStyle='#1f2937';x.fillRect(r.l,0,r.rw,H);
+x.fillStyle='#f59e0b';x.fillRect(r.l-5,0,5,H);x.fillRect(r.l+r.rw,0,5,H);
+
+const car=CARS[sel],sp=run?car.sp:3;
+off=(off+sp1.4)%60;
+x.strokeStyle='rgba(255,255,255,.45)';x.lineWidth=4;x.setLineDash([28,28]);x.lineDashOffset=-off;
+for(let i=1;i<3;i++){x.beginPath();x.moveTo(r.l+r.lwi,0);x.lineTo(r.l+r.lw*i,H);x.stroke()}
+x.setLineDash([]);
+
+const tx=r.l+r.lw*(lane+.5);
+px+=(tx-px).24;
+const cw=Math.min(r.lw.6,52),ch=cw*1.7,py=H-ch-40;
+
+if(run){
+tm++;
+if(tm>=Math.max(28,65-Math.floor(score/4))){
+tm=0;
+const cols=['#94a3b8','#e2e8f0','#34d399','#60a5fa','#fb7185'];
+cars.push({l:Math.floor(Math.random()3),y:-ch,s:sp(.45+Math.random().25),c:cols[Math.floor(Math.random()5)],ok:false});
+}
+for(let i=cars.length-1;i>=0;i--){
+const t=cars[i];
+t.y+=sp-t.s;
+const ex=r.l+r.lw(t.l+.5);
+box(ex,t.y,cw,ch,t.c,false);
+if(!t.ok&&t.y>py+ch.5){
+t.ok=true;score++;stars++;
+document.getElementById('pHud').textContent=score;
+document.getElementById('sHud').textContent=stars;
+}
+if(Math.abs(ex-px)<cw*.75&&Math.abs(t.y-py)<ch*.8){
+run=false;save();drawMenu();menu.style.display='flex';break;
+}
+if(t.y>H+ch)cars.splice(i,1);
+}
+}
+box(px,py,cw,ch,car.col,true);
+requestAnimationFrame(loop);
+}
+drawMenu();loop();
+</script>
